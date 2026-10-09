@@ -22,7 +22,8 @@ geyser:
 # Trade execution: amount per trade and acceptable price deviation
 trade:
   buy_amount: 0.0001 # Amount of SOL to spend when buying (in SOL)
-  buy_slippage: 0.3 # Maximum acceptable price deviation (0.3 = 30%)
+  buy_slippage: 0.2 # Maximum acceptable price deviation (0.2 = 20%)
+  # Kept wider than the buy: a stop-loss sell that reverts leaves you holding.
   sell_slippage: 0.3
 
   # Spend amounts for coins paired against a non-SOL quote asset.
@@ -36,15 +37,18 @@ trade:
   #  usdc: 1.0
 
   # Exit strategy configuration
-  exit_strategy: "time_based" # Options: "time_based", "tp_sl", "manual"
-  #take_profit_percentage: 0.1 # Take profit at 10% gain (0.1 = 10%)
-  #stop_loss_percentage: 0.1 # Stop loss at 10% loss (0.1 = 10%)
-  max_hold_time: 5 # Maximum hold time in seconds for TP/SL strategy, for time_based - see wait_after_buy
-  #price_check_interval: 2 # Check price every 2 seconds
+  # Cut losers early, let winners run to a fixed target, and never sit on a
+  # coin that goes nowhere. The stop is checked every price_check_interval, so
+  # a coin that dumps between checks exits below it, not at it.
+  exit_strategy: "tp_sl" # Options: "time_based", "tp_sl", "manual"
+  take_profit_percentage: 0.5 # Sell at +50%
+  stop_loss_percentage: 0.15 # Sell at -15%
+  max_hold_time: 90 # Sell after 90s whatever the price
+  price_check_interval: 1 # Seconds between price reads
   # A tp/sl exit sell can revert when the price moves under it. The bot re-reads
   # the price and retries; after this many attempts it gives up and leaves the
   # position open, tokens still held.
-  #max_exit_sell_attempts: 3
+  max_exit_sell_attempts: 5
 
   # EXTREME FAST mode: skip the curve-stabilization wait and the price check,
   # buying a fixed token amount instead. Faster, but you don't learn the price
@@ -95,7 +99,7 @@ compute_units:
 ai_filter:
   enabled: true
   model: "claude-opus-5-5"
-  min_score: 60 # 0..100
+  min_score: 75 # 0..100 — higher buys fewer, better-looking coins
   effort: "low" # low | medium | high | xhigh | max — higher is slower
   timeout_seconds: 10 # model call budget; on expiry the coin is skipped
   metadata_timeout_seconds: 2 # budget to fetch the coin's metadata URI

@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Trader Dashboard</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --text: #15181d;
+    --muted: #5d6673; --border: #dde1e7; --accent: #5b4cf0; --accent-text: #fff;
+    --good: #12805c; --good-bg: #e3f5ee; --bad: #c4314b; --bad-bg: #fbe7ea;
+    --warn: #9a6200; --warn-bg: #fff3d6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1116; --panel: #161a21; --panel-2: #1d222b; --text: #e7eaf0;
+      --muted: #8d96a5; --border: #2a303b; --accent: #7d70ff; --accent-text: #fff;
+      --good: #3fcf94; --good-bg: #123327; --bad: #ff6b81; --bad-bg: #3a1820;
+      --warn: #f2b84b; --warn-bg: #3a2c10;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1116; --panel: #161a21; --panel-2: #1d222b; --text: #e7eaf0;
+    --muted: #8d96a5; --border: #2a303b; --accent: #7d70ff; --accent-text: #fff;
+    --good: #3fcf94; --good-bg: #123327; --bad: #ff6b81; --bad-bg: #3a1820;
+    --warn: #f2b84b; --warn-bg: #3a2c10;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .spacer { flex: 1; }
+  .banner { padding: 10px 14px; border-radius: 10px; margin-bottom: 16px;
+    background: var(--warn-bg); color: var(--warn); border: 1px solid var(--border); }
+  .banner.error { background: var(--bad-bg); color: var(--bad); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat .label { font-size: 12px; color: var(--muted); }
+  .stat .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .good { color: var(--good); } .bad { color: var(--bad); }
+  .bots { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .bot { cursor: pointer; transition: border-color .15s; }
+  .bot.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .bot-head { display: flex; align-items: center; gap: 8px; }
+  .bot-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+  .meta { font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
+  .pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+    background: var(--panel-2); color: var(--muted); }
+  .pill.running { background: var(--good-bg); color: var(--good); }
+  .pill.stopping { background: var(--warn-bg); color: var(--warn); }
+  .pill.failed { background: var(--bad-bg); color: var(--bad); }
+  .pill.ai { background: var(--panel-2); color: var(--accent); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button { font: inherit; font-weight: 600; border-radius: 8px; padding: 7px 14px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text); }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button.danger { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .detail { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 860px) { .detail { grid-template-columns: minmax(0, 1fr); } }
+  form .field { margin-bottom: 12px; }
+  form label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  form .help { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  input[type=number], input[type=text], select, textarea { width: 100%; font: inherit; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; }
+  textarea { min-height: 70px; resize: vertical; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  fieldset { border: 0; padding: 0; margin: 0 0 8px; }
+  legend { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .tab { border: 0; background: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; color: var(--muted); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .feed { max-height: 460px; overflow: auto; }
+  .decision { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .score { font-weight: 700; font-size: 16px; text-align: center; border-radius: 8px; padding: 6px 0; font-variant-numeric: tabular-nums; }
+  .score.buy { background: var(--good-bg); color: var(--good); }
+  .score.skip { background: var(--panel-2); color: var(--muted); }
+  .decision .sym { font-weight: 600; overflow-wrap: anywhere; }
+  .decision .why { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  pre.log { margin: 0; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 460px; overflow: auto; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  .empty { color: var(--muted); padding: 16px 0; text-align: center; }
+  .msg { font-size: 13px; margin-top: 8px; min-height: 1em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AI Trader</h1>
+    <span class="muted" id="conn">connecting…</span>
+    <span class="spacer"></span>
+    <button id="theme" type="button">Theme</button>
+  </header>
+
+  <div id="auth" class="banner error" hidden>
+    No dashboard token. Open the link printed in the terminal when you ran <code>pump_dashboard</code>.
+  </div>
+  <div class="banner">Starting a bot trades with real funds from the wallet in your <code>.env</code>.
+    Profit and loss below is before fees.</div>
+
+  <section class="stats">
+    <div class="panel stat"><div class="label">Closed trades</div><div class="value" id="s-closed">–</div></div>
+    <div class="panel stat"><div class="label">Win rate</div><div class="value" id="s-winrate">–</div></div>
+    <div class="panel stat"><div class="label">P&amp;L (before fees)</div><div class="value" id="s-pnl">–</div></div>
+    <div class="panel stat"><div class="label">Open positions</div><div class="value" id="s-open">–</div></div>
+  </section>
+
+  <section class="bots" id="bots"></section>
+
+  <section class="detail" id="detail" hidden>
+    <div class="panel">
+      <h2 id="settings-title">Settings</h2>
+      <form id="settings"></form>
+    </div>
+    <div class="panel">
+      <div class="tabs">
+        <button class="tab active" data-tab="ai" type="button">AI decisions</button>
+        <button class="tab" data-tab="log" type="button">Log</button>
+        <button class="tab" data-tab="console" type="button">Console</button>
+      </div>
+      <div id="tab-ai" class="feed"></div>
+      <pre id="tab-log" class="log" hidden></pre>
+      <pre id="tab-console" class="log" hidden></pre>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Closed trades</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Coin</th><th>Sold</th><th class="num">Cost</th><th class="num">Proceeds</th><th class="num">P&amp;L</th><th class="num">%</th></tr></thead>
+        <tbody id="trades"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+// Field metadata for the settings form. Keys match dashboard/yaml_edit.py.
+const FIELDS = [
+  { group: "Trading" },
+  { key: "trade.buy_amount", label: "Buy amount (SOL)", type: "number", step: "0.0001",
+    help: "Spent per coin. Priority fees are paid on top of this." },
+  { key: "trade.buy_slippage", label: "Buy slippage", type: "number", step: "0.01", help: "0.2 = 20%" },
+  { key: "trade.sell_slippage", label: "Sell slippage", type: "number", step: "0.01",
+    help: "Keep wide enough that a stop-loss sell lands." },
+  { key: "filters.yolo_mode", label: "Keep trading after the first coin", type: "bool" },
+  { group: "Exit" },
+  { key: "trade.exit_strategy", label: "Exit strategy", type: "select",
+    options: ["tp_sl", "time_based", "manual"] },
+  { key: "trade.take_profit_percentage", label: "Take profit", type: "number", step: "0.05", help: "0.5 = sell at +50%" },
+  { key: "trade.stop_loss_percentage", label: "Stop loss", type: "number", step: "0.01", help: "0.15 = sell at −15%" },
+  { key: "trade.max_hold_time", label: "Max hold (seconds)", type: "number", step: "1" },
+  { key: "trade.price_check_interval", label: "Price check every (seconds)", type: "number", step: "1" },
+  { group: "AI filter" },
+  { key: "ai_filter.enabled", label: "Score coins with Claude before buying", type: "bool" },
+  { key: "ai_filter.model", label: "Model", type: "select",
+    options: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"], help: "Haiku is fastest and cheapest." },
+  { key: "ai_filter.min_score", label: "Minimum score (0–100)", type: "number", step: "1" },
+  { key: "ai_filter.effort", label: "Effort", type: "select", options: ["low", "medium", "high", "xhigh", "max"],
+    help: "Higher thinks longer and delays the buy." },
+  { key: "ai_filter.fail_open", label: "Buy when the AI gives no answer", type: "bool" },
+  { key: "ai_filter.strategy_prompt", label: "Your strategy (optional)", type: "textarea",
+    help: "Extra guidance for the scoring, e.g. themes to favour." },
+  { key: "enabled", label: "Run with pump_bot (all bots)", type: "bool" },
+];
+
+const state = { token: null, bots: [], selected: null, tab: "ai", formFor: null, formDirty: false };
+
+function readToken() {
+  const m = location.hash.match(/token=([^&]+)/);
+  if (m) {
+    try { sessionStorage.setItem("dashboard-token", m[1]); } catch (e) { /* storage blocked */ }
+    history.replaceState(null, "", location.pathname);
+    return m[1];
+  }
+  try { return sessionStorage.getItem("dashboard-token"); } catch (e) { return null; }
+}
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: { "X-Dashboard-Token": state.token || "", "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* non-JSON error body */ }
+  if (!res.ok) {
+    if (res.status === 401) document.getElementById("auth").hidden = false;
+    throw new Error((data && data.error) || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children) if (c !== null && c !== undefined) node.append(c);
+  return node;
+}
+
+const fmt = (n, d = 6) => (n === null || n === undefined || Number.isNaN(n)) ? "–" : Number(n).toFixed(d);
+const signed = (n, d = 6) => (n > 0 ? "+" : "") + fmt(n, d);
+
+function statusPill(bot) {
+  if (bot.stopping) return el("span", { class: "pill stopping" }, "stopping…");
+  if (bot.running) return el("span", { class: "pill running" }, "running");
+  if (bot.exit_code !== null && bot.exit_code !== 0) return el("span", { class: "pill failed" }, `exited ${bot.exit_code}`);
+  return el("span", { class: "pill" }, "stopped");
+}
+
+function renderBots() {
+  const root = document.getElementById("bots");
+  root.replaceChildren(...state.bots.map((bot) => {
+    const s = bot.settings;
+    const exit = s["trade.exit_strategy"] === "tp_sl"
+      ? `TP ${fmt((s["trade.take_profit_percentage"] || 0) * 100, 0)}% / SL ${fmt((s["trade.stop_loss_percentage"] || 0) * 100, 0)}%`
+      : (s["trade.exit_strategy"] || "time_based");
+    const startBtn = el("button", { class: "primary", type: "button", disabled: bot.running,
+      onclick: (e) => { e.stopPropagation(); startBot(bot); } }, "Start");
+    const stopBtn = el("button", { class: "danger", type: "button", disabled: !bot.running || bot.stopping,
+      onclick: (e) => { e.stopPropagation(); stopBot(bot); } }, "Stop");
+    return el("article", { class: "panel bot" + (bot.id === state.selected ? " selected" : ""),
+        onclick: () => select(bot.id) },
+      el("div", { class: "bot-head" },
+        el("span", { class: "bot-name" }, bot.name), el("span", { class: "spacer" }),
+        s["ai_filter.enabled"] ? el("span", { class: "pill ai" }, `AI ≥ ${s["ai_filter.min_score"] ?? 60}`) : null,
+        statusPill(bot)),
+      el("div", { class: "meta" },
+        `${bot.platform} · ${bot.listener || "?"} · ${fmt(s["trade.buy_amount"], 4)} SOL · ${exit}`),
+      bot.error ? el("div", { class: "msg bad" }, bot.error) : null,
+      el("div", { class: "row" }, startBtn, stopBtn));
+  }));
+  if (!state.bots.length) root.replaceChildren(el("div", { class: "panel empty" }, "No bots in bots/*.yaml"));
+}
+
+function select(id) {
+  state.selected = id;
+  state.formDirty = false;
+  renderBots();
+  renderForm(true);
+  refreshLog();
+}
+
+function selectedBot() { return state.bots.find((b) => b.id === state.selected); }
+
+function renderForm(force) {
+  const bot = selectedBot();
+  const detail = document.getElementById("detail");
+  detail.hidden = !bot;
+  if (!bot) return;
+  // Don't clobber what the user is typing on a background refresh.
+  if (!force && state.formFor === bot.id && state.formDirty) return;
+  state.formFor = bot.id;
+  document.getElementById("settings-title").textContent = `Settings · ${bot.name}`;
+  const form = document.getElementById("settings");
+  const nodes = [];
+  let fieldset = null;
+  for (const f of FIELDS) {
+    if (f.group) { fieldset = el("fieldset", {}, el("legend", {}, f.group)); nodes.push(fieldset); continue; }
+    const value = bot.settings[f.key];
+    let input;
+    if (f.type === "bool") {
+      input = el("input", { type: "checkbox", name: f.key, checked: !!value });
+      fieldset.append(el("div", { class: "field" }, el("label", { class: "check" }, input, f.label)));
+      continue;
+    } else if (f.type === "select") {
+      input = el("select", { name: f.key }, ...f.options.map((o) => el("option", { value: o, selected: o === value }, o)));
+    } else if (f.type === "textarea") {
+      input = el("textarea", { name: f.key });
+      input.value = value || "";
+    } else {
+      input = el("input", { type: "number", name: f.key, step: f.step });
+      input.value = value ?? "";
+    }
+    fieldset.append(el("div", { class: "field" }, el("label", {}, f.label), input,
+      f.help ? el("div", { class: "help" }, f.help) : null));
+  }
+  const save = el("button", { class: "primary", type: "submit", disabled: bot.running }, "Save settings");
+  nodes.push(el("div", { class: "row" }, save,
+    bot.running ? el("span", { class: "muted" }, "Stop the bot to change settings.") : null));
+  nodes.push(el("div", { class: "msg", id: "settings-msg" }));
+  form.replaceChildren(...nodes);
+  form.oninput = () => { state.formDirty = true; };
+}
+
+async function saveSettings(ev) {
+  ev.preventDefault();
+  const bot = selectedBot();
+  const form = ev.target;
+  const changes = {};
+  for (const f of FIELDS) {
+    if (!f.key) continue;
+    const input = form.elements[f.key];
+    let value;
+    if (f.type === "bool") value = input.checked;
+    else if (f.type === "number") { if (input.value === "") continue; value = Number(input.value); }
+    else { value = input.value; if (f.type === "textarea" && value === "" && !bot.settings[f.key]) continue; }
+    if (value !== bot.settings[f.key]) changes[f.key] = value;
+  }
+  const msg = document.getElementById("settings-msg");
+  if (!Object.keys(changes).length) { msg.className = "msg muted"; msg.textContent = "Nothing changed."; return; }
+  try {
+    const updated = await api("PUT", `/api/bots/${encodeURIComponent(bot.id)}/settings`, changes);
+    Object.assign(bot, updated);
+    state.formDirty = false;
+    renderBots(); renderForm(true);
+    const m = document.getElementById("settings-msg");
+    m.className = "msg good"; m.textContent = `Saved ${Object.keys(changes).length} setting(s).`;
+  } catch (e) {
+    msg.className = "msg bad"; msg.textContent = e.message;
+  }
+}
+
+async function startBot(bot) {
+  const s = bot.settings;
+  const ok = confirm(
+    `Start "${bot.name}" with REAL funds?\n\n` +
+    `It spends ${s["trade.buy_amount"]} SOL per coin plus priority fees, ` +
+    `exits on ${s["trade.exit_strategy"] || "time_based"}` +
+    (s["ai_filter.enabled"] ? `, and only buys coins the AI scores ${s["ai_filter.min_score"]}+.` : ", with no AI filter."));
+  if (!ok) return;
+  try { await api("POST", `/api/bots/${encodeURIComponent(bot.id)}/start`); select(bot.id); }
+  catch (e) { alert(`Could not start: ${e.message}`); }
+  refreshBots();
+}
+
+async function stopBot(bot) {
+  if (!confirm(`Stop "${bot.name}"? It sells and cleans up first, which can take up to a couple of minutes.`)) return;
+  try { await api("POST", `/api/bots/${encodeURIComponent(bot.id)}/stop`); }
+  catch (e) { alert(`Could not stop: ${e.message}`); }
+  refreshBots();
+}
+
+async function refreshBots() {
+  try {
+    const data = await api("GET", "/api/bots");
+    state.bots = data.bots;
+    if (!state.selected && state.bots.length) {
+      const running = state.bots.find((b) => b.running);
+      state.selected = (running || state.bots.find((b) => b.settings["ai_filter.enabled"]) || state.bots[0]).id;
+    }
+    renderBots(); renderForm(false);
+    document.getElementById("conn").textContent = `updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    document.getElementById("conn").textContent = `offline: ${e.message}`;
+  }
+}
+
+async function refreshLog() {
+  const bot = selectedBot();
+  if (!bot) return;
+  try {
+    const data = await api("GET", `/api/bots/${encodeURIComponent(bot.id)}/log`);
+    const feed = document.getElementById("tab-ai");
+    feed.replaceChildren(...(data.ai_decisions.length ? data.ai_decisions.map((d) =>
+      el("div", { class: "decision" },
+        el("div", { class: "score " + (d.buy ? "buy" : "skip") }, d.score ?? "–"),
+        el("div", {},
+          el("div", { class: "sym" }, `${d.buy ? "Bought" : "Skipped"} ${d.symbol}`,
+            el("span", { class: "muted" }, d.time ? ` · ${d.time}` : "")),
+          el("div", { class: "why" }, d.reason)))) :
+      [el("div", { class: "empty" }, "No AI decisions yet. They appear here once the bot runs with the AI filter on.")]));
+    const log = document.getElementById("tab-log");
+    log.textContent = data.lines.length ? data.lines.join("\n") : (data.file ? "(empty log)" : "No log file yet.");
+    const con = document.getElementById("tab-console");
+    con.textContent = data.console.length ? data.console.join("\n") : "No console output from this session.";
+  } catch (e) { /* shown by the connection status */ }
+}
+
+async function refreshTrades() {
+  try {
+    const data = await api("GET", "/api/trades");
+    const s = data.summary;
+    document.getElementById("s-closed").textContent = s.closed;
+    document.getElementById("s-winrate").textContent = s.win_rate === null ? "–" : `${fmt(s.win_rate, 0)}%`;
+    const pnl = document.getElementById("s-pnl");
+    pnl.textContent = s.closed ? signed(s.pnl) : "–";
+    pnl.className = "value " + (s.pnl > 0 ? "good" : s.pnl < 0 ? "bad" : "");
+    document.getElementById("s-open").textContent = data.open.length;
+    const body = document.getElementById("trades");
+    body.replaceChildren(...(data.closed.length ? data.closed.map((t) =>
+      el("tr", {},
+        el("td", {}, t.symbol || "?"),
+        el("td", { class: "muted" }, (t.sold_at || "").replace("T", " ").slice(0, 19)),
+        el("td", { class: "num" }, fmt(t.cost)),
+        el("td", { class: "num" }, fmt(t.proceeds)),
+        el("td", { class: "num " + (t.pnl > 0 ? "good" : "bad") }, signed(t.pnl)),
+        el("td", { class: "num " + (t.pnl > 0 ? "good" : "bad") }, t.pnl_pct === null ? "–" : signed(t.pnl_pct, 1) + "%"))) :
+      [el("tr", {}, el("td", { colspan: 6, class: "empty" }, "No closed trades yet."))]));
+  } catch (e) { /* shown by the connection status */ }
+}
+
+document.getElementById("settings").addEventListener("submit", saveSettings);
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => {
+    state.tab = tab.dataset.tab;
+    for (const t of document.querySelectorAll(".tab")) t.classList.toggle("active", t === tab);
+    for (const name of ["ai", "log", "console"]) document.getElementById(`tab-${name}`).hidden = name !== state.tab;
+  });
+}
+document.getElementById("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+});
+
+state.token = readToken();
+if (!state.token) document.getElementById("auth").hidden = false;
+refreshBots().then(() => { renderForm(true); refreshLog(); });
+refreshTrades();
+setInterval(refreshBots, 2000);
+setInterval(refreshLog, 2000);
+setInterval(refreshTrades, 5000);
+</script>
+</body>
+</html>

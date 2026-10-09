@@ -48,6 +48,7 @@ individual scripts for a subset.
 | `verify_launchlab_launch_parsing.py` | legacy, v0 and v1 StonkFun launches parse from every account slot over blockSubscribe and geyser alike, lookup-table accounts included; the creator slot wins over the payer; a router-issued launch is found; letsbonk and StonkFun each keep to their own platform configs; LaunchLab listeners subscribe on platform configs, pump.fun on its program |
 | `verify_cleanup_harvests_withheld_fees.py` | cleanup harvests withheld Token-2022 transfer fees into the mint before closing a token account, and sends a bare close when nothing is withheld |
 | `verify_ai_filter.py` | the AI gate buys at or above `min_score` only; a timeout, API error, refusal or unparseable answer skips unless `fail_open`; coin data goes in as a delimited data block with only whitelisted metadata fields; each mint is scored once; `ANTHROPIC_API_KEY` is redacted |
+| `verify_dashboard.py` | every dashboard API call needs the startup token; a bot id can only name a file in `bots/`; editing every whitelisted setting on every committed config keeps its comments and passes `validate_config`; unknown, mistyped and out-of-range values are refused with the file untouched; a running bot refuses edits and a second start, and stops on SIGINT; AI verdict lines parse and trades pair buy-to-sell with the right P&L |
 
 Two mainnet simulations, also no funds moved:
 

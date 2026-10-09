@@ -136,6 +136,26 @@ on-chain flags; the bot buys only at or above `min_score`.
 - A score is a filter, not an edge: it judges branding, not order flow, and
   most new coins go to zero either way.
 
+### Dashboard
+
+```bash
+pump_dashboard        # or: uv run src/dashboard/server.py
+```
+
+It prints a link like `http://127.0.0.1:8787/#token=...`; open it in a browser.
+From there you can start and stop each bot, change its trade, exit and AI
+settings, and watch AI decisions, the log, closed trades and P&L as they happen.
+
+- Only your machine can reach it, and every request needs the token from that
+  link, because a started bot spends from your wallet. `--host` exposes it to
+  other machines; don't do that on a network you don't trust.
+- **Start** runs that one bot whatever its `enabled` says; **Stop** lets it sell
+  and clean up first (up to about two minutes). Closing the dashboard stops
+  the bots it started.
+- Settings are edited in the bot's YAML with its comments kept, and only while
+  the bot is stopped. Keys, RPC endpoints and `.env` are never shown or editable.
+- P&L comes from `trades/trades.log` and is before network and priority fees.
+
 ### Non-SOL quote assets
 
 pump.fun supports quote assets other than SOL, USDC first. Amounts are in that mint's own whole units, so `usdc: 1.0` is one USDC and is **not** comparable to `buy_amount`:

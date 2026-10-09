@@ -311,7 +311,12 @@ def main() -> None:
     except Exception as e:
         logging.warning(f"Could not load platform information: {e}")
 
-    run_all_bots()
+    # One config path runs that bot alone, whatever its `enabled` says; this is
+    # how the dashboard starts a bot.
+    if len(sys.argv) > 1:
+        asyncio.run(start_bot(sys.argv[1]))
+    else:
+        run_all_bots()
 
 
 if __name__ == "__main__":
