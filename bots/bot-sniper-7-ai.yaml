@@ -1,0 +1,142 @@
+# Parameters for one bot instance. Review the values before running.
+
+# Bot identification and connection settings
+name: "bot-sniper-7-ai"
+env_file: ".env"
+rpc_endpoint: "${SOLANA_NODE_RPC_ENDPOINT}"
+wss_endpoint: "${SOLANA_NODE_WSS_ENDPOINT}"
+private_key: "${SOLANA_PRIVATE_KEY}"
+
+enabled: false # You can turn off the bot w/o removing its config
+separate_process: true
+
+# Options: "pump_fun" (default), "lets_bonk", "stonk_fun"
+platform: "pump_fun"
+
+# Geyser configuration (fastest method for getting updates)
+geyser:
+  endpoint: "${GEYSER_ENDPOINT}"
+  api_token: "${GEYSER_API_TOKEN}"
+  auth_type: "x-token" # or "basic"
+
+# Trade execution: amount per trade and acceptable price deviation
+trade:
+  buy_amount: 0.0001 # Amount of SOL to spend when buying (in SOL)
+  buy_slippage: 0.3 # Maximum acceptable price deviation (0.3 = 30%)
+  sell_slippage: 0.3
+
+  # Spend amounts for coins paired against a non-SOL quote asset.
+  # pump.fun now supports quote mints other than SOL (USDC first). Amounts are
+  # in that mint's own whole units, so "usdc: 1.0" means one USDC — it is NOT
+  # comparable to buy_amount above. Keys accept the aliases "sol"/"usdc" or a
+  # raw base58 mint address. A coin whose quote mint has no entry here is
+  # skipped rather than bought with a SOL-sized amount.
+  # SOL always uses buy_amount above and needs no entry.
+  #quote_amounts:
+  #  usdc: 1.0
+
+  # Exit strategy configuration
+  exit_strategy: "time_based" # Options: "time_based", "tp_sl", "manual"
+  #take_profit_percentage: 0.1 # Take profit at 10% gain (0.1 = 10%)
+  #stop_loss_percentage: 0.1 # Stop loss at 10% loss (0.1 = 10%)
+  max_hold_time: 5 # Maximum hold time in seconds for TP/SL strategy, for time_based - see wait_after_buy
+  #price_check_interval: 2 # Check price every 2 seconds
+  # A tp/sl exit sell can revert when the price moves under it. The bot re-reads
+  # the price and retries; after this many attempts it gives up and leaves the
+  # position open, tokens still held.
+  #max_exit_sell_attempts: 3
+
+  # EXTREME FAST mode: skip the curve-stabilization wait and the price check,
+  # buying a fixed token amount instead. Faster, but you don't learn the price
+  # you paid. With geyser/logs/blocks the bot makes no RPC call at all between
+  # detecting the coin and sending the buy.
+  extreme_fast_mode: true
+  extreme_fast_token_amount: 20 # Amount of tokens to buy
+
+  # How long that read may take, in seconds, before the coin is SKIPPED. Raise
+  # it to buy more coins on a slow endpoint, lower it to skip faster. Buying
+  # without it reverts on-chain and still costs the fee.
+  curve_refresh_budget: 2.0
+
+  # Set false to make every listener do the pre-buy read, giving up the
+  # zero-RPC path above.
+  trust_create_event: true
+
+# Priority fees: transaction speed vs cost.
+# Note: dynamic mode costs an extra RPC call, which slows the buy.
+priority_fees:
+  enable_dynamic: false # Use latest transactions to estimate required fee (getRecentPrioritizationFees)
+  enable_fixed: true # Use fixed amount below
+  fixed_amount: 1_000_000 # Base fee in microlamports
+  extra_percentage: 0.0 # Percentage increase on riority fee regardless of the calculation method (0.1 = 10%)
+  hard_cap: 1_000_000 # Maximum allowable fee in microlamports to prevent excessive spending
+
+# Compute unit limits for transaction processing
+# Operation-specific defaults are used if not specified: buy=100K, sell=60K
+compute_units:
+  # Override default CU limits for this platform
+  # buy: 100_000    # Buy operations (ATA creation + trading)
+  # sell: 60_000    # Sell operations (just trading)
+
+  # Account data size optimization (reduces CU cost and improves tx priority)
+  # Reduces CU cost from 16k to ~128 CU by limiting loaded account data.
+  # Default is 64MB (16k CU). Setting to 512KB significantly reduces overhead.
+  # Note: Savings don't show in "consumed CU" but improve tx priority/cost.
+  # Note (Nov 23, 2025): with data size set to 512KB, transactions fail - increasing to 12.5MB resolves the issue.
+  # Reference: https://www.anza.xyz/blog/cu-optimization-with-setloadedaccountsdatasizelimit
+  # account_data_size: 12_500_000  # Disabled: causes MaxLoadedAccountsDataSizeExceeded with Token-2022
+
+# AI filter: Claude scores each coin that passes the filters below, 0..100, from
+# its name, symbol, metadata (description, socials) and on-chain flags, and the
+# bot only buys at or above min_score. Needs ANTHROPIC_API_KEY in env_file.
+# Each scored coin is one API call, and the call adds latency before the buy:
+# roughly a second or more, so pair it with yolo_mode and accept that it is not
+# a first-block sniper. claude-haiku-5-5 is faster and far cheaper per call.
+ai_filter:
+  enabled: true
+  model: "claude-opus-5-5"
+  min_score: 60 # 0..100
+  effort: "low" # low | medium | high | xhigh | max — higher is slower
+  timeout_seconds: 10 # model call budget; on expiry the coin is skipped
+  metadata_timeout_seconds: 2 # budget to fetch the coin's metadata URI
+  # Buy when the model gives no answer (timeout, outage, refusal). Off means a
+  # failure costs a missed coin, never an unscreened buy.
+  fail_open: false
+  # Extra guidance appended to the scoring prompt.
+  #strategy_prompt: |
+  #  Prefer AI- and gaming-themed coins. Treat coins without a Twitter link as duds.
+
+# Filters for token selection
+filters:
+  match_string: null # Only process tokens with this string in name/symbol
+  bro_address: null # Only trade tokens created by this user address
+  # Restrict which quote assets to trade. Omit (or set null) to allow any quote
+  # mint that has an amount configured under trade.quote_amounts.
+  # Accepts "sol"/"usdc" aliases or raw mint addresses.
+  #allowed_quote_mints: ["sol"]
+  listener_type: "geyser" # Method for detecting new tokens: "logs", "blocks", or "geyser"
+  max_token_age: 0.001 # Maximum token age in seconds for processing
+  marry_mode: false # Only buy tokens, skip selling
+  yolo_mode: true # Continuously trade tokens
+
+# Retry and timeout settings
+retries:
+  max_attempts: 1 # Number of attempts for transaction submission
+  wait_after_creation: 15 # Seconds to wait after token creation (only if EXTREME FAST is disabled)
+  wait_after_buy: 5 # Holding period after buy transaction
+  wait_before_new_token: 15 # Pause between token trades
+
+# Token and account management
+cleanup:
+  # Cleanup mode determines when to manage token accounts. Options:
+  # "disabled": no cleanup will occur.
+  # "on_fail": only clean up if a buy transaction fails.
+  # "after_sell": clean up after selling.
+  # "post_session": clean up all empty accounts after a trading session ends.
+  mode: "post_session"
+  force_close_with_burn: false # Force burning remaining tokens before closing account
+  with_priority_fee: false # Use priority fees for cleanup transactions
+
+# Node provider configuration
+node:
+  max_rps: 25 # Maximum requests per second

@@ -59,6 +59,7 @@ Fill in `.env`:
 | `SOLANA_NODE_WSS_ENDPOINT` | WebSocket endpoint (for `logs` / `blocks` listeners) |
 | `SOLANA_PRIVATE_KEY` | Base58 private key of the trading wallet |
 | `GEYSER_ENDPOINT`, `GEYSER_API_TOKEN`, `GEYSER_AUTH_TYPE` | For the `geyser` and `shreds` listeners (same endpoint, different RPC) |
+| `ANTHROPIC_API_KEY` | Only for the [AI filter](#ai-filter) |
 
 Public RPC nodes will not work for this workload — see [throughput](#throughput-and-rate-limits) below.
 
@@ -117,6 +118,23 @@ Two knobs:
   on a slow endpoint, lower it to skip faster.
 - **`trust_create_event`** (default `true`) — set `false` to make every listener
   do the read, giving up the zero-RPC path.
+
+### AI filter
+
+Set `ai_filter.enabled: true` and Claude scores every coin that passes the other
+filters, 0 to 100, from its name, symbol, metadata (description, socials) and
+on-chain flags; the bot buys only at or above `min_score`.
+[`bots/bot-sniper-7-ai.yaml`](bots/bot-sniper-7-ai.yaml) is a starting point.
+
+- Each scored coin is one API call, and the call delays the buy by about a
+  second or more, so this suits `yolo_mode` rather than first-block sniping.
+  `model: claude-haiku-5-5` is faster and much cheaper per call than the
+  default `claude-opus-5-5`.
+- When the model gives no answer (timeout, outage, refusal) the coin is skipped.
+  `fail_open: true` buys it instead.
+- `strategy_prompt` appends your own guidance to the scoring prompt.
+- A score is a filter, not an edge: it judges branding, not order flow, and
+  most new coins go to zero either way.
 
 ### Non-SOL quote assets
 

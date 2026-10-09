@@ -29,11 +29,28 @@ from config_loader import (
     print_config_summary,
     validate_platform_listener_combination,
 )
+from trading.ai_filter import DEFAULT_MODEL, AITokenFilter
 from trading.universal_trader import (
     DEFAULT_MAX_EXIT_SELL_ATTEMPTS,
     UniversalTrader,
 )
 from utils.logger import install_secret_redaction, setup_file_logging
+
+
+def build_ai_filter(cfg: dict) -> AITokenFilter | None:
+    """The `ai_filter` section as a filter, or None when absent or disabled."""
+    ai_cfg = cfg.get("ai_filter") or {}
+    if not ai_cfg.get("enabled", False):
+        return None
+    return AITokenFilter(
+        model=ai_cfg.get("model", DEFAULT_MODEL),
+        min_score=ai_cfg.get("min_score", 60),
+        effort=ai_cfg.get("effort", "low"),
+        timeout_seconds=ai_cfg.get("timeout_seconds", 10.0),
+        metadata_timeout_seconds=ai_cfg.get("metadata_timeout_seconds", 2.0),
+        strategy_prompt=ai_cfg.get("strategy_prompt"),
+        fail_open=ai_cfg.get("fail_open", False),
+    )
 
 
 def setup_logging(bot_name: str):
@@ -158,6 +175,7 @@ async def start_bot(config_path: str):
             bro_address=cfg["filters"].get("bro_address"),
             marry_mode=cfg["filters"].get("marry_mode", False),
             yolo_mode=cfg["filters"].get("yolo_mode", False),
+            ai_filter=build_ai_filter(cfg),
             # Compute unit configuration
             compute_units=cfg.get("compute_units", {}),
             # Node provider configuration

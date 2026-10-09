@@ -47,6 +47,20 @@ CONFIG_VALIDATION_RULES = [
         "filters.max_transfer_fee_bps must be between 0 and 10000",
     ),
     (
+        "ai_filter.min_score",
+        int,
+        0,
+        100,
+        "ai_filter.min_score must be between 0 and 100",
+    ),
+    (
+        "ai_filter.timeout_seconds",
+        (int, float),
+        0,
+        float("inf"),
+        "ai_filter.timeout_seconds must be a positive number",
+    ),
+    (
         "priority_fees.fixed_amount",
         int,
         0,
@@ -89,6 +103,7 @@ VALID_VALUES = {
     "cleanup.mode": ["disabled", "on_fail", "after_sell", "post_session"],
     "trade.exit_strategy": ["time_based", "tp_sl", "manual"],
     "platform": ["pump_fun", "lets_bonk", "stonk_fun"],
+    "ai_filter.effort": ["low", "medium", "high", "xhigh", "max"],
 }
 
 # Platform-specific listener compatibility

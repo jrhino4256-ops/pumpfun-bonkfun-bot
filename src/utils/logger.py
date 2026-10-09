@@ -56,6 +56,7 @@ _SECRET_ENV_VARS = (
     "SOLANA_NODE_RPC_ENDPOINT",
     "SOLANA_NODE_WSS_ENDPOINT",
     "GEYSER_ENDPOINT",
+    "ANTHROPIC_API_KEY",
 )
 
 # Shortest value worth substring-matching. A one- or two-character variable

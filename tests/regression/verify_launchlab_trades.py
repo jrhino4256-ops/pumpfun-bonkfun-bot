@@ -478,8 +478,11 @@ def check_f_single_token_mode_waits_past_refused_coins() -> bool:
         allowed_quote_mints=None,
         quote_amounts={WSOL_MINT: 0.001},
         max_transfer_fee_bps=100,
+        ai_filter=None,
+        _ai_approved=set(),
     )
     trader._skip_reason = lambda token: UniversalTrader._skip_reason(trader, token)
+    trader._ai_approves = lambda token: UniversalTrader._ai_approves(trader, token)
     found = asyncio.run(UniversalTrader._wait_for_token(trader))
     ok = found is not None and found.symbol == "BUYABLE"
     if not ok:

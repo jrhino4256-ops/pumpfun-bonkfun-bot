@@ -36,6 +36,7 @@ from interfaces.core import (
 )
 from monitoring.listener_factory import ListenerFactory
 from platforms import get_platform_implementations
+from trading.ai_filter import AITokenFilter
 from trading.base import TradeResult
 from trading.platform_aware import PlatformAwareBuyer, PlatformAwareSeller
 from trading.position import ExitReason, Position
@@ -191,6 +192,8 @@ class UniversalTrader:
         bro_address: str | None = None,
         marry_mode: bool = False,
         yolo_mode: bool = False,
+        # Claude-scored buy gate; None trades every coin the filters above pass
+        ai_filter: AITokenFilter | None = None,
         # Compute unit configuration
         compute_units: dict | None = None,
         # Node provider configuration
@@ -313,6 +316,8 @@ class UniversalTrader:
         self.bro_address = bro_address
         self.marry_mode = marry_mode
         self.yolo_mode = yolo_mode
+        self.ai_filter = ai_filter
+        self._ai_approved: set[str] = set()
 
         # State tracking
         self.traded_mints: set[Pubkey] = set()
@@ -362,6 +367,10 @@ class UniversalTrader:
         )
         logger.info(f"Marry mode: {self.marry_mode}")
         logger.info(f"YOLO mode: {self.yolo_mode}")
+        if self.ai_filter is not None:
+            logger.info(
+                f"AI filter: {self.ai_filter.model}, min score {self.ai_filter.min_score}"
+            )
         logger.info(f"Exit strategy: {self.exit_strategy}")
 
         if self.exit_strategy == "tp_sl":
@@ -449,6 +458,10 @@ class UniversalTrader:
             skip_reason = self._skip_reason(token)
             if skip_reason:
                 logger.info(f"Skipping {token.symbol} - {skip_reason}; still waiting")
+                return
+            # Scored here, not in _handle_token, so a refused coin keeps the
+            # wait going instead of ending the session on it.
+            if not await self._ai_approves(token):
                 return
             # Record when the token was discovered
             self.token_timestamps[token_key] = monotonic()
@@ -553,6 +566,8 @@ class UniversalTrader:
         for key in old_keys:
             self.token_timestamps.pop(key, None)
 
+        if self.ai_filter is not None:
+            await self.ai_filter.close()
         await self.solana_client.close()
 
     async def _queue_token(self, token_info: TokenInfo) -> None:
@@ -638,6 +653,32 @@ class UniversalTrader:
             )
         return None
 
+    async def _ai_approves(self, token_info: TokenInfo) -> bool:
+        """Whether the AI filter lets this coin through; True with no filter.
+
+        A coin is scored once: single-token mode asks on detection and
+        `_handle_token` asks again for the same coin.
+        """
+        if self.ai_filter is None:
+            return True
+        token_key = str(token_info.mint)
+        if token_key in self._ai_approved:
+            return True
+
+        verdict = await self.ai_filter.evaluate(token_info)
+        score = "n/a" if verdict.score is None else verdict.score
+        if not verdict.buy:
+            logger.info(
+                f"Skipping {token_info.symbol} - AI score {score} "
+                f"(min {self.ai_filter.min_score}): {verdict.reason}"
+            )
+            return False
+        logger.info(
+            f"AI approved {token_info.symbol} - score {score}: {verdict.reason}"
+        )
+        self._ai_approved.add(token_key)
+        return True
+
     async def _handle_token(self, token_info: TokenInfo) -> None:
         """Handle a new token creation event."""
         try:
@@ -653,6 +694,9 @@ class UniversalTrader:
                 logger.info(f"Skipping {token_info.symbol} - {skip_reason}")
                 return
             token_quote_mint = normalize_quote_mint(token_info.quote_mint)
+
+            if not await self._ai_approves(token_info):
+                return
 
             # Wait for pool/curve to stabilize (unless in extreme fast mode)
             if not self.extreme_fast_mode:
