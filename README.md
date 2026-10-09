@@ -61,6 +61,10 @@ Fill in `.env`:
 | `GEYSER_ENDPOINT`, `GEYSER_API_TOKEN`, `GEYSER_AUTH_TYPE` | For the `geyser` and `shreds` listeners (same endpoint, different RPC) |
 | `ANTHROPIC_API_KEY` | Only for the [AI filter](#ai-filter) |
 
+No wallet yet? `uv run tools/create_wallet.py` makes a fresh one, writes its key into
+`.env` without printing it, saves a backup under `~/.config/pump-bot/`, and prints the
+address to fund. It refuses to replace a key that is already there.
+
 Public RPC nodes will not work for this workload — see [throughput](#throughput-and-rate-limits) below.
 
 ### 4. Configure a bot
